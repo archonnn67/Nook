@@ -2,6 +2,8 @@
 
 Nook is a lightweight, minimalist habit and daily focus tracker designed for simplicity, clarity, and daily consistency. It operates entirely client-side, requiring no accounts, databases, or external dependencies.
 
+Live Demo: [https://archonnn67.github.io/Nook/](https://archonnn67.github.io/Nook/)
+
 ## Key Features
 
 - Minimalist Interface: Clean, distraction-free design built for speed and ease of use.
@@ -21,6 +23,11 @@ Nook is a lightweight, minimalist habit and daily focus tracker designed for sim
 - Inter font (Google Fonts)
 
 ## Getting Started
+
+### Live Demo
+
+You can try the live application directly in your browser:
+[https://archonnn67.github.io/Nook/](https://archonnn67.github.io/Nook/)
 
 ### Prerequisites
 
