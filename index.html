@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nook — Habit Tracker</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Minimalist Header -->
+        <header class="app-header">
+            <div class="brand-section">
+                <div class="brand-title-wrap">
+                    <span class="brand-dot"></span>
+                    <h1 class="brand-name">nook</h1>
+                </div>
+                <p class="subtitle">Daily habit and focus tracker</p>
+            </div>
+            <div class="header-actions">
+                <div class="streak-badge" id="overall-streak" title="Overall day streak">
+                    <svg class="streak-flame" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path>
+                    </svg>
+                    <span class="streak-count" id="overall-streak-count">0</span>
+                    <span class="streak-label">days</span>
+                </div>
+                <div class="today-date" id="current-date"></div>
+            </div>
+        </header>
+
+        <main class="app-main">
+            <!-- Sleek Progress Section -->
+            <section class="card progress-card" id="progress-section">
+                <div class="progress-info">
+                    <div class="progress-title-group">
+                        <span class="progress-label">Today's progress</span>
+                        <span class="progress-percentage" id="progress-percentage">0%</span>
+                    </div>
+                    <span class="progress-stats" id="progress-stats">0 of 0 completed</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" id="progress-bar" style="width: 0%;"></div>
+                </div>
+            </section>
+
+            <!-- Habits Section -->
+            <section class="card habit-card">
+                <div class="card-header">
+                    <div class="card-title-wrap">
+                        <h2>Habits</h2>
+                        <button type="button" class="btn-packs" id="open-packs-btn" title="Choose a habit pack">
+                            <svg class="btn-packs-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+                                <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+                                <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
+                                <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+                            </svg>
+                            <span>Packs</span>
+                        </button>
+                    </div>
+                    <div class="habit-filters">
+                        <button type="button" class="filter-btn active" data-filter="all">All</button>
+                        <button type="button" class="filter-btn" data-filter="active">Active</button>
+                        <button type="button" class="filter-btn" data-filter="completed">Completed</button>
+                    </div>
+                </div>
+
+                <!-- Input Form -->
+                <form class="input-group" id="habit-form">
+                    <div class="input-wrapper">
+                        <svg class="input-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        <input 
+                            type="text" 
+                            id="habit-input" 
+                            placeholder="New habit..." 
+                            autocomplete="off"
+                            required
+                        >
+                    </div>
+                    <button type="submit" id="add-btn">
+                        <span>Add</span>
+                    </button>
+                </form>
+
+                <!-- Habit List -->
+                <ul class="habit-list" id="habit-list">
+                    <!-- Rendered by app.js -->
+                </ul>
+
+                <!-- Empty State -->
+                <div class="empty-state" id="empty-state" style="display: none;">
+                    <div class="empty-icon-circle">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                    </div>
+                    <p class="empty-title">No habits yet</p>
+                    <p class="empty-desc">Add a new habit above to start your day with clarity</p>
+                </div>
+            </section>
+        </main>
+
+        <!-- Minimal Footer -->
+        <footer class="app-footer">
+            <button type="button" class="btn-footer-license" id="footer-license-btn" title="License & credits">nook</button>
+        </footer>
+    </div>
+
+    <!-- Habit Sets Modal (Compact popup, not fullscreen) -->
+    <div class="modal-backdrop" id="packs-modal" aria-hidden="true" style="display: none;">
+        <div class="modal-card" role="dialog" aria-labelledby="modal-title" aria-modal="true">
+            <div class="modal-header">
+                <div class="modal-title-wrap">
+                    <h3 id="modal-title">Habit Packs</h3>
+                    <p class="modal-subtitle">Curated collections for different areas of life</p>
+                </div>
+                <button type="button" class="modal-close-btn" id="close-packs-btn" aria-label="Close modal">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Category selector tabs -->
+            <div class="packs-tabs" id="packs-tabs" role="tablist">
+                <!-- Injected by app.js -->
+            </div>
+
+            <!-- Active Pack Content -->
+            <div class="packs-body" id="packs-body">
+                <!-- Injected by app.js -->
+            </div>
+
+            <!-- Modal Actions Footer -->
+            <div class="modal-footer">
+                <button type="button" class="btn-toggle-all" id="btn-toggle-all-pack">Select all</button>
+                <button type="button" class="btn-add-pack" id="btn-add-selected-pack">
+                    <span>Add to list</span>
+                    <span class="pack-count-badge" id="pack-count-badge">0</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- License Modal -->
+    <div class="modal-backdrop" id="license-modal" aria-hidden="true" style="display: none;">
+        <div class="modal-card modal-card-sm" role="dialog" aria-labelledby="license-title" aria-modal="true">
+            <div class="modal-header">
+                <div class="modal-title-wrap">
+                    <h3 id="license-title">License</h3>
+                    <p class="modal-subtitle">Author information and usage rights</p>
+                </div>
+                <button type="button" class="modal-close-btn" id="close-license-btn" aria-label="Close modal">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="license-modal-body">
+                <div class="license-info-row">
+                    <span class="license-label">Project</span>
+                    <span class="license-value"><a href="https://github.com/archonnn67/Nook" target="_blank" rel="noopener">Nook</a></span>
+                </div>
+                <div class="license-info-row">
+                    <span class="license-label">Author</span>
+                    <span class="license-value"><a href="https://github.com/archonnn67" target="_blank" rel="noopener">Velihovetchi Bogdan</a></span>
+                </div>
+                <div class="license-info-row">
+                    <span class="license-label">Year</span>
+                    <span class="license-value">2026</span>
+                </div>
+                <div class="license-info-row">
+                    <span class="license-label">License Type</span>
+                    <span class="license-value">
+                        <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" rel="noopener">CC BY-NC-ND 4.0</a>
+                    </span>
+                </div>
+                <div class="license-icons-wrap">
+                    <img src="https://mirrors.creativecommons.org/presskit/icons/cc.svg" alt="CC" class="license-icon-svg">
+                    <img src="https://mirrors.creativecommons.org/presskit/icons/by.svg" alt="BY" class="license-icon-svg">
+                    <img src="https://mirrors.creativecommons.org/presskit/icons/nc.svg" alt="NC" class="license-icon-svg">
+                    <img src="https://mirrors.creativecommons.org/presskit/icons/nd.svg" alt="ND" class="license-icon-svg">
+                </div>
+                <p class="license-description">
+                    Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
