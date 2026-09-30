@@ -10,12 +10,13 @@ const STORAGE_KEY_FILTER = 'nook_active_filter';
 const STORAGE_KEY_DRAFT = 'nook_input_draft';
 const STORAGE_KEY_OVERALL_STREAK = 'nook_overall_streak';
 const STORAGE_KEY_LAST_FULL_DAY = 'nook_last_full_day';
+const STORAGE_KEY_FULL_DAYS = 'nook_full_days';
 
-// Default habits for the very first launch
+// Default habits for the very first launch (clean initial state)
 const DEFAULT_HABITS = [
-    { id: '1', name: 'Drink a glass of water in the morning', completed: false, streak: 3, lastCompletedDate: getYesterdayDateString(), createdAt: new Date().toISOString() },
-    { id: '2', name: 'Read a book for 15 minutes', completed: false, streak: 1, lastCompletedDate: getYesterdayDateString(), createdAt: new Date().toISOString() },
-    { id: '3', name: 'Take a walk outside', completed: false, streak: 0, lastCompletedDate: null, createdAt: new Date().toISOString() }
+    { id: '1', name: 'Drink a glass of water in the morning', completed: false, streak: 0, completedDates: [], lastCompletedDate: null, createdAt: new Date().toISOString() },
+    { id: '2', name: 'Read a book for 15 minutes', completed: false, streak: 0, completedDates: [], lastCompletedDate: null, createdAt: new Date().toISOString() },
+    { id: '3', name: 'Take a walk outside', completed: false, streak: 0, completedDates: [], lastCompletedDate: null, createdAt: new Date().toISOString() }
 ];
 
 // Curated Habit Sets for Different Lifestyles
@@ -76,11 +77,112 @@ const HABIT_PACKS = [
     }
 ];
 
+// Helper: Format Date object to YYYY-MM-DD string
+function formatDateString(d) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+// Return formatted today date string: YYYY-MM-DD
+function getTodayDateString() {
+    return formatDateString(new Date());
+}
+
+// Return formatted yesterday date string: YYYY-MM-DD
+function getYesterdayDateString() {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return formatDateString(d);
+}
+
+// Return date string 1 day before a given YYYY-MM-DD string
+function getPreviousDateString(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const date = new Date(y, m - 1, d, 12, 0, 0); // Noon eliminates any DST boundary shifts
+    date.setDate(date.getDate() - 1);
+    return formatDateString(date);
+}
+
+// Robust, deterministic streak calculation from an array of completed YYYY-MM-DD strings
+function calculateStreak(completedDates) {
+    if (!completedDates || completedDates.length === 0) return 0;
+    const dateSet = new Set(completedDates);
+    const today = getTodayDateString();
+    const yesterday = getYesterdayDateString();
+
+    let streak = 0;
+    let checkDate;
+
+    if (dateSet.has(today)) {
+        streak = 1;
+        checkDate = yesterday;
+    } else if (dateSet.has(yesterday)) {
+        // Active streak continuing from yesterday, awaiting today's completion
+        streak = 1;
+        checkDate = getPreviousDateString(yesterday);
+    } else {
+        // Neither today nor yesterday was completed -> streak broken
+        return 0;
+    }
+
+    while (dateSet.has(checkDate)) {
+        streak++;
+        checkDate = getPreviousDateString(checkDate);
+    }
+
+    return streak;
+}
+
+// Pluralization helper for streaks (1 day, 2 days)
+function getDaysPlural(n) {
+    return Math.abs(n) === 1 ? 'day' : 'days';
+}
+
+// Full Days Storage (dates when all habits were 100% completed)
+function loadFullDays() {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY_FULL_DAYS);
+        if (stored !== null) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) return parsed;
+        }
+    } catch (e) {
+        console.error('Failed to parse fullDays from localStorage', e);
+    }
+
+    // Migration from old storage if exists
+    const oldStreak = parseInt(localStorage.getItem(STORAGE_KEY_OVERALL_STREAK), 10) || 0;
+    const oldLastFullDay = localStorage.getItem(STORAGE_KEY_LAST_FULL_DAY);
+    if (oldStreak > 0 && oldLastFullDay) {
+        const migrated = [];
+        let curr = oldLastFullDay;
+        for (let i = 0; i < oldStreak; i++) {
+            migrated.push(curr);
+            curr = getPreviousDateString(curr);
+        }
+        migrated.sort();
+        saveFullDays(migrated);
+        return migrated;
+    }
+
+    return [];
+}
+
+function saveFullDays(data) {
+    try {
+        localStorage.setItem(STORAGE_KEY_FULL_DAYS, JSON.stringify(data));
+    } catch (e) {
+        console.error('Failed to save fullDays to localStorage', e);
+    }
+}
+
 // App State
+let fullDays = loadFullDays();
 let habits = loadHabits();
 let currentFilter = loadFilter();
-let overallStreak = loadOverallStreak();
-let lastFullDay = localStorage.getItem(STORAGE_KEY_LAST_FULL_DAY) || null;
+let overallStreak = calculateStreak(fullDays);
 let midnightTimer = null;
 let currentPackId = 'dev';
 let selectedPackHabits = new Set();
@@ -123,7 +225,7 @@ function init() {
 
     // 3. Render current date, overall streak, and habits list
     displayCurrentDate();
-    updateOverallStreakDisplay();
+    evaluateOverallStreak();
     setupEventListeners();
     render();
 
@@ -131,60 +233,27 @@ function init() {
     scheduleMidnightReset();
 }
 
-// Return formatted date string: YYYY-MM-DD
-function getTodayDateString() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-}
-
-// Return yesterday formatted date string: YYYY-MM-DD
-function getYesterdayDateString() {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-}
-
-// Pluralization helper for streaks (1 day, 2 days)
-function getDaysPlural(n) {
-    return Math.abs(n) === 1 ? 'day' : 'days';
-}
-
 // Check if midnight passed and reset habits completion & manage streaks
 function checkAndResetDailyHabits() {
     const today = getTodayDateString();
-    const yesterday = getYesterdayDateString();
-    const lastRecordedDate = localStorage.getItem(STORAGE_KEY_DATE);
 
-    if (lastRecordedDate && lastRecordedDate !== today) {
-        // A new day arrived!
-        habits = habits.map(habit => {
-            let currentStreak = habit.streak || 0;
-            // If the habit was neither completed yesterday nor completed today, the streak broke
-            if (habit.lastCompletedDate !== yesterday && habit.lastCompletedDate !== today) {
-                currentStreak = 0;
-            }
+    fullDays = loadFullDays();
 
-            return {
-                ...habit,
-                completed: false, // daily checkbox uncheck
-                streak: currentStreak,
-                prevStreak: currentStreak
-            };
-        });
-        saveHabits();
+    // Recalculate daily completion and streaks for all habits based on dates
+    habits = habits.map(habit => {
+        const completedDates = habit.completedDates || [];
+        const isCompletedToday = completedDates.includes(today);
+        const streak = calculateStreak(completedDates);
+        return {
+            ...habit,
+            completed: isCompletedToday,
+            streak: streak
+        };
+    });
+    saveHabits();
 
-        // Check overall streak: if yesterday was not a fully completed day, streak resets
-        if (lastFullDay !== yesterday && lastFullDay !== today) {
-            overallStreak = 0;
-            localStorage.setItem(STORAGE_KEY_OVERALL_STREAK, '0');
-        }
-    }
+    overallStreak = calculateStreak(fullDays);
+    localStorage.setItem(STORAGE_KEY_OVERALL_STREAK, overallStreak.toString());
 
     // Always update last recorded date to today
     localStorage.setItem(STORAGE_KEY_DATE, today);
@@ -209,7 +278,7 @@ function scheduleMidnightReset() {
     midnightTimer = setTimeout(() => {
         checkAndResetDailyHabits();
         displayCurrentDate();
-        updateOverallStreakDisplay();
+        evaluateOverallStreak();
         render();
         scheduleMidnightReset();
     }, msUntilMidnight);
@@ -226,13 +295,20 @@ function displayCurrentDate() {
 
 // Update overall streak header badge
 function updateOverallStreakDisplay() {
+    const today = getTodayDateString();
+    const isCompletedToday = fullDays && fullDays.includes(today);
+
     if (overallStreakCountEl) {
         overallStreakCountEl.textContent = overallStreak;
     }
     if (overallStreakEl) {
         if (overallStreak > 0) {
             overallStreakEl.classList.add('active');
-            overallStreakEl.title = `Total streak: ${overallStreak} ${getDaysPlural(overallStreak)} in a row`;
+            if (isCompletedToday) {
+                overallStreakEl.title = `Total streak: ${overallStreak} ${getDaysPlural(overallStreak)} in a row (all habits completed today!)`;
+            } else {
+                overallStreakEl.title = `Total streak: ${overallStreak} ${getDaysPlural(overallStreak)} in a row (complete today's habits to continue!)`;
+            }
         } else {
             overallStreakEl.classList.remove('active');
             overallStreakEl.title = 'Complete all daily habits to start a streak!';
@@ -243,31 +319,29 @@ function updateOverallStreakDisplay() {
 // Check and update overall streak when habits progress reaches 100%
 function evaluateOverallStreak() {
     const today = getTodayDateString();
-    const yesterday = getYesterdayDateString();
+    const fullDaysSet = new Set(loadFullDays());
 
     const total = habits.length;
     const completed = habits.filter(h => h.completed).length;
     const isAllCompleted = total > 0 && completed === total;
 
     if (isAllCompleted) {
-        if (lastFullDay !== today) {
-            if (lastFullDay === yesterday) {
-                overallStreak += 1;
-            } else {
-                overallStreak = 1;
-            }
-            lastFullDay = today;
-            localStorage.setItem(STORAGE_KEY_OVERALL_STREAK, overallStreak.toString());
-            localStorage.setItem(STORAGE_KEY_LAST_FULL_DAY, lastFullDay);
-        }
+        fullDaysSet.add(today);
     } else {
-        // If user unchecks a habit after having completed all of today's
-        if (lastFullDay === today) {
-            overallStreak = Math.max(0, overallStreak - 1);
-            lastFullDay = yesterday;
-            localStorage.setItem(STORAGE_KEY_OVERALL_STREAK, overallStreak.toString());
-            localStorage.setItem(STORAGE_KEY_LAST_FULL_DAY, lastFullDay);
-        }
+        fullDaysSet.delete(today);
+    }
+
+    fullDays = Array.from(fullDaysSet).sort();
+    saveFullDays(fullDays);
+
+    overallStreak = calculateStreak(fullDays);
+    localStorage.setItem(STORAGE_KEY_OVERALL_STREAK, overallStreak.toString());
+
+    const lastFull = fullDays.length > 0 ? fullDays[fullDays.length - 1] : null;
+    if (lastFull) {
+        localStorage.setItem(STORAGE_KEY_LAST_FULL_DAY, lastFull);
+    } else {
+        localStorage.removeItem(STORAGE_KEY_LAST_FULL_DAY);
     }
 
     updateOverallStreakDisplay();
@@ -294,7 +368,36 @@ function loadHabits() {
     try {
         const stored = localStorage.getItem(STORAGE_KEY_HABITS);
         if (stored !== null) {
-            return JSON.parse(stored);
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+                const today = getTodayDateString();
+
+                return parsed.map(habit => {
+                    let completedDates = Array.isArray(habit.completedDates) 
+                        ? habit.completedDates 
+                        : null;
+
+                    // Migrate old habit without completedDates
+                    if (!completedDates) {
+                        completedDates = [];
+                        if (habit.completed) {
+                            completedDates.push(today);
+                        }
+                    }
+
+                    const streak = calculateStreak(completedDates);
+                    const isCompleted = completedDates.includes(today);
+                    const lastDate = completedDates.length > 0 ? completedDates[completedDates.length - 1] : null;
+
+                    return {
+                        ...habit,
+                        completedDates,
+                        completed: isCompleted,
+                        streak,
+                        lastCompletedDate: lastDate
+                    };
+                });
+            }
         }
     } catch (e) {
         console.error('Failed to parse habits from localStorage', e);
@@ -310,12 +413,6 @@ function loadFilter() {
         return savedFilter;
     }
     return 'all';
-}
-
-// Load overall streak
-function loadOverallStreak() {
-    const saved = localStorage.getItem(STORAGE_KEY_OVERALL_STREAK);
-    return saved ? parseInt(saved, 10) || 0 : 0;
 }
 
 // Save habits to LocalStorage
@@ -341,6 +438,7 @@ function addHabit(name) {
         name: trimmed,
         completed: false,
         streak: 0,
+        completedDates: [],
         lastCompletedDate: null,
         createdAt: new Date().toISOString()
     };
@@ -358,47 +456,29 @@ function addHabit(name) {
 // Toggle habit completion status and calculate habit streak
 function toggleHabit(id) {
     const today = getTodayDateString();
-    const yesterday = getYesterdayDateString();
 
     habits = habits.map(habit => {
         if (habit.id !== id) return habit;
 
+        const dateSet = new Set(habit.completedDates || []);
         const willBeCompleted = !habit.completed;
-        let streak = habit.streak || 0;
-        let lastDate = habit.lastCompletedDate || null;
-        let prevStreak = habit.prevStreak !== undefined ? habit.prevStreak : streak;
-        let prevLastDate = habit.prevLastCompletedDate !== undefined ? habit.prevLastCompletedDate : lastDate;
 
         if (willBeCompleted) {
-            // Marking as completed today
-            prevStreak = streak;
-            prevLastDate = lastDate;
-
-            if (lastDate === yesterday) {
-                // Streak continued consecutively from yesterday!
-                streak += 1;
-            } else if (lastDate === today) {
-                // Already checked earlier today, maintain streak
-            } else {
-                // Started fresh or streak was broken
-                streak = 1;
-            }
-            lastDate = today;
+            dateSet.add(today);
         } else {
-            // Unchecking (user canceled completion)
-            if (lastDate === today) {
-                streak = Math.max(0, prevStreak);
-                lastDate = prevLastDate;
-            }
+            dateSet.delete(today);
         }
+
+        const updatedDates = Array.from(dateSet).sort();
+        const streak = calculateStreak(updatedDates);
+        const lastDate = updatedDates.length > 0 ? updatedDates[updatedDates.length - 1] : null;
 
         return {
             ...habit,
             completed: willBeCompleted,
             streak: streak,
-            lastCompletedDate: lastDate,
-            prevStreak: prevStreak,
-            prevLastCompletedDate: prevLastDate
+            completedDates: updatedDates,
+            lastCompletedDate: lastDate
         };
     });
 
@@ -458,9 +538,16 @@ function render() {
         filtered.forEach(habit => {
             const streakCount = habit.streak || 0;
             const streakPlural = getDaysPlural(streakCount);
-            const streakTitle = streakCount > 0 
-                ? `Streak: ${streakCount} ${streakPlural} in a row` 
-                : 'Complete today to start a streak!';
+            let streakTitle = '';
+            if (streakCount > 0) {
+                if (habit.completed) {
+                    streakTitle = `Streak: ${streakCount} ${streakPlural} in a row`;
+                } else {
+                    streakTitle = `Streak: ${streakCount} ${streakPlural} in a row (complete today to continue!)`;
+                }
+            } else {
+                streakTitle = 'Complete today to start a streak!';
+            }
 
             const li = document.createElement('li');
             li.className = `habit-item ${habit.completed ? 'completed' : ''}`;
@@ -667,6 +754,7 @@ function addSelectedPackHabits() {
                 name: habitText,
                 completed: false,
                 streak: 0,
+                completedDates: [],
                 lastCompletedDate: null,
                 createdAt: new Date().toISOString()
             };
@@ -827,6 +915,7 @@ function setupEventListeners() {
         if (lastDate && lastDate !== today) {
             checkAndResetDailyHabits();
             displayCurrentDate();
+            evaluateOverallStreak();
             render();
             scheduleMidnightReset();
         }
